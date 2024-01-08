@@ -1,4 +1,4 @@
-# TRI2I
+# TRI2I: TIR RGB Image-to-Image Translation
 ## Dataset
 The dataset consists of 148,829 TIR/RGB image pairs collected in 16-20k capture sessions in and around Salt Lake City, Utah. It includes a variety of global priors in both lighting and situation, as summarized in the table below. The dataset is available for download [here](https://drive.google.com/file/d/1qorMXaQa57tq8Nj3dFBd-s0oU42tWbC0/view?usp=drive_link)
 
