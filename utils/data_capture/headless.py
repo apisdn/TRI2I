@@ -1,19 +1,21 @@
 # This is a file created for a specific dataset project
 # It captures images synchronously from both TIR and RGB cameras
-# Really it's just a combination of the other code in this repository
-# And it is more use specific than the others, so check croppint and camera alignment well
+# It is based on combined.py with the display code removed so that it can run
+# headless
 #
 # Original author: Michael S. Mead <mmead@thermal.com>
 # Modified for use in this application by Emma Wadsworth <u1081622@utah.edu>
+# Modified for use in this application by Dudley Irish <d.irish@utah.edu>
 #
 # The license for the original code is here: https://www.apache.org/licenses/LICENSE-2.0
 #   
 # As a note, this requires the seekcamera.dll file provided in the seek thermal programming kit
 
-from threading import Condition
-
+import argparse
 import cv2
 import os
+import time
+from threading import Condition
 from datetime import datetime
 from picamera2 import Picamera2
 
@@ -27,6 +29,14 @@ from seekcamera import (
     SeekFrame,
 )
 
+def init_argparse() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        usage="%(prog)s [COUNT] [DELAY]",
+        description="Capture data from IR and RGB cameras."
+        )
+    parser.add_argument('count', nargs='?', default = 1);
+    parser.add_argument('delay', nargs='?', default = 1);
+    return parser
 
 class Renderer:
     """Contains camera and image data required to render images to the screen."""
@@ -119,27 +129,28 @@ def on_event(camera, event_type, event_status, renderer):
 
 
 def main():
-    window_name = "Thermal Capture"
-    other_window = "RGB Capture"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.namedWindow(other_window, cv2.WINDOW_NORMAL)
-
+    parser = init_argparse()
+    args = parser.parse_args()
+    print(f'count: {args.count}')
+    print(f'delay: {args.delay}')
+    count = int(args.count);
+    delay = int(args.delay);
     pairNum = 1
 
     # Set up folder to save new capture data in
     now = datetime.now()
     date_time = now.strftime("%Y%m%d%H%M")
-    dir1 = os.path.join(os.getcwd(),"RGB" + date_time)
-    os.mkdir(dir1)
-    dir2 = os.path.join(os.getcwd(),"TIR" + date_time)
-    os.mkdir(dir2)
-    dir3 = os.path.join(os.getcwd(),"RGBfull" + date_time)
-    os.mkdir(dir3)
-    dir4 = os.path.join(os.getcwd(),"TIRfull" + date_time)
-    os.mkdir(dir4)
+    rgbdir = os.path.join(os.getcwd(),"RGB" + date_time)
+    os.mkdir(rgbdir)
+    tirdir = os.path.join(os.getcwd(),"TIR" + date_time)
+    os.mkdir(tirdir)
 
     rgb = Picamera2()
+    camera_config = rgb.create_still_configuration()
+    rgb.configure(camera_config)
     rgb.start()
+
+    start = time.time()
 
     # Create a context structure responsible for managing all connected USB cameras.
     # Cameras with other IO types can be managed by using a bitwise or of the
@@ -157,65 +168,33 @@ def main():
                 if renderer.frame_condition.wait(150.0 / 1000.0):
                     #get images into img (TIR) and frame (RGB)
                     img = renderer.frame.data
-                    pureTIR = img;#tir normal
-                    img = img[0:240, 20:260]#tir square was 40:280 on second one
-                    #img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                     
                     ogrgb = rgb.capture_array()
-                    rgbimg = ogrgb
-                    #rgbimg = cv2.flip(ogrgb, 1)#flip horizontally
-                    rgbimg = cv2.rotate(rgbimg, cv2.ROTATE_180)
-                    pureRGB = rgbimg[140:500, 0:480]#480x640->480x360
-                    pureDim = (320,240)
-                    pureRGBr = cv2.resize(pureRGB, pureDim, interpolation = cv2.INTER_AREA)
-                    rgbimg = rgbimg[64:576, 0:512]
+                    #rgbimg = cv2.rotate(ogrgb, cv2.ROTATE_180)
+                    rgbimg = ogrgb;
 
-
-                    filename = str(pairNum) + ".jpg"
+                    filename = f"{pairNum:04d}.jpg"
                     #TIR img to file here
-                    os.chdir(dir1)
-                    dim = (256, 256)
-                    resizedt = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
-                    cv2.imwrite(filename, resizedt)
+                    os.chdir(tirdir)
+                    cv2.imwrite(filename, img)
                     
                     #RGB img to file here
-                    os.chdir(dir2)
-                    resizedr = cv2.resize(rgbimg, dim, interpolation = cv2.INTER_AREA)
-                    cv2.imwrite(filename, resizedr)
+                    os.chdir(rgbdir)
+                    cv2.imwrite(filename, rgbimg)
 
-                    #saving pure versions
-                    filename = str(pairNum) + ".bmp"
-                    os.chdir(dir3)
-                    cv2.imwrite(filename, pureTIR)
-                    os.chdir(dir4)
-                    cv2.imwrite(filename, pureRGBr)
-
-                    # Resize the rendering window.
-                    if renderer.first_frame:
-                        (height, width, _) = resizedr.shape
-                        cv2.resizeWindow(window_name, width * 2, height * 2)
-                        cv2.resizeWindow(other_window, width * 2, height * 2)
-                        renderer.first_frame = False
-
-                    # Render the image to the window.
-                    cv2.imshow(window_name, img)
-                    cv2.imshow(other_window, rgbimg)
-
-                    print(pairNum)
+                    print(f"Written: {filename}")
                     pairNum+=1
+                    if pairNum > count:
+                        break
+
+                    if ((start + delay) - time.time()) > 0:
+                        time.sleep((start + delay) - time.time())
+                        start = time.time()
 
             # Process key events.
             key = cv2.waitKey(1)
             if key == ord("q"):
                 break
-
-            # Check if the window has been closed manually.
-            if not cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE):
-                break
-
-    cv2.destroyWindow(window_name)
-    cv2.destroyWindow(other_window)
-
 
 if __name__ == "__main__":
     main()
