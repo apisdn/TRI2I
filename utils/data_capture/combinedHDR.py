@@ -15,6 +15,7 @@ from threading import Condition
 import cv2
 import os
 from datetime import datetime
+import numpy as np
 
 from seekcamera import (
     SeekCameraIOType,
@@ -126,18 +127,21 @@ def main():
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.namedWindow(other_window, cv2.WINDOW_NORMAL)
 
+    # file name will be pairnum--change it every session so you have different names for everything
     pairNum = 1
+    gainmode = 0
+    gains = np.array([0.45, 0.85, 0.15])
 
     # Set up folder to save new capture data in
     now = datetime.now()
     date_time = now.strftime("%Y%m%d%H%M")
-    dir1 = os.path.join(os.getcwd(),"RGB" + date_time)
+    dir1 = os.path.join(os.getcwd(),"TIR" + date_time)
     os.mkdir(dir1)
-    dir2 = os.path.join(os.getcwd(),"TIR" + date_time)
+    dir2 = os.path.join(os.getcwd(),"RGB" + date_time)
     os.mkdir(dir2)
-    dir3 = os.path.join(os.getcwd(),"RGBfull" + date_time)
+    dir3 = os.path.join(os.getcwd(),"TIRfull" + date_time)
     os.mkdir(dir3)
-    dir4 = os.path.join(os.getcwd(),"TIRfull" + date_time)
+    dir4 = os.path.join(os.getcwd(),"RGBfull" + date_time)
     os.mkdir(dir4)
 
     rgb = cv2.VideoCapture(0) # video capture source camera
@@ -156,53 +160,62 @@ def main():
             # it will be notified by the user defined frame available callback thread.
             with renderer.frame_condition:
                 if renderer.frame_condition.wait(150.0 / 1000.0):
-                    #get images into img (TIR) and frame (RGB)
-                    img = renderer.frame.data
-                    pureTIR = img;#tir normal
-                    img = img[0:240, 20:260]#tir square was 40:280 on second one
-                    #img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                    
-                    ret,ogrgb = rgb.read()
-                    rgbimg = cv2.flip(ogrgb, 1)#flip horizontally
-                    rgbimg = cv2.rotate(rgbimg, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                    pureRGB = rgbimg[140:500, 0:480]#480x640->480x360
-                    pureDim = (320,240)
-                    pureRGBr = cv2.resize(pureRGB, pureDim, interpolation = cv2.INTER_AREA)
-                    rgbimg = rgbimg[64:576, 0:512]
-
-
-                    filename = str(pairNum) + ".jpg"
-                    #TIR img to file here
-                    os.chdir(dir1)
-                    dim = (256, 256)
-                    resizedt = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
-                    cv2.imwrite(filename, resizedt)
-                    
-                    #RGB img to file here
-                    os.chdir(dir2)
-                    resizedr = cv2.resize(rgbimg, dim, interpolation = cv2.INTER_AREA)
-                    cv2.imwrite(filename, resizedr)
-
-                    #saving pure versions
-                    filename = str(pairNum) + ".bmp"
-                    os.chdir(dir3)
-                    cv2.imwrite(filename, pureTIR)
-                    os.chdir(dir4)
-                    cv2.imwrite(filename, pureRGBr)
-
                     # Resize the rendering window.
                     if renderer.first_frame:
-                        (height, width, _) = resizedr.shape
+                        renderer.camera.histeq_agc_gain_limit = gains[2] #0.65 is default
+
+                        height = 256
+                        width = 256
                         cv2.resizeWindow(window_name, width * 2, height * 2)
                         cv2.resizeWindow(other_window, width * 2, height * 2)
                         renderer.first_frame = False
+                    else:
+                        #get images into img (TIR) and frame (RGB)
+                        img = renderer.frame.data
+                        pureTIR = img;#tir normal
+                        img = img[0:240, 20:260]#tir square was 40:280 on second one
+                        #img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    
+                        ret,ogrgb = rgb.read()
+                        rgbimg = cv2.flip(ogrgb, 1)#flip horizontally
+                        rgbimg = cv2.rotate(rgbimg, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                        pureRGB = rgbimg[140:500, 0:480]#480x640->480x360
+                        pureDim = (320,240)
+                        pureRGBr = cv2.resize(pureRGB, pureDim, interpolation = cv2.INTER_AREA)
+                        rgbimg = rgbimg[64:576, 0:512]
 
-                    # Render the image to the window.
-                    cv2.imshow(window_name, img)
-                    cv2.imshow(other_window, rgbimg)
+                        filename = str(pairNum)
+                    
+                        #TIR img to file here
+                        os.chdir(dir1)
+                        dim = (256, 256)
+                        resizedt = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+                        cv2.imwrite(filename + "_" + str(gainmode) + ".png", resizedt)
+                    
+                        #RGB img to file here
+                        os.chdir(dir2)
+                        resizedr = cv2.resize(rgbimg, dim, interpolation = cv2.INTER_AREA)
+                        cv2.imwrite(filename + ".png", resizedr)
 
-                    print(pairNum)
-                    pairNum+=1
+                        #saving pure versions
+                        filename = str(pairNum) + ".bmp"
+                        os.chdir(dir3)
+                        cv2.imwrite(filename + "_" + str(gainmode) + ".png", pureTIR)
+                        os.chdir(dir4)
+                        cv2.imwrite(filename + ".png", pureRGBr)
+
+                        # deal with getting hdr settings right
+                        if gainmode == 2:
+                            gainmode = 0
+                            pairNum += 1
+                        else:
+                            gainmode += 1
+
+                        renderer.camera.histeq_agc_gain_limit = gains[gainmode] #0.65 is default
+
+                        # Render the image to the window.
+                        cv2.imshow(window_name, img)
+                        cv2.imshow(other_window, rgbimg)
 
             # Process key events.
             key = cv2.waitKey(1)
