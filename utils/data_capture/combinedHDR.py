@@ -144,7 +144,7 @@ def main():
     dir4 = os.path.join(os.getcwd(),"RGBfull" + date_time)
     os.mkdir(dir4)
 
-    rgb = cv2.VideoCapture(0) # video capture source camera
+    rgb = cv2.VideoCapture(1) # video capture source camera
 
     # Create a context structure responsible for managing all connected USB cameras.
     # Cameras with other IO types can be managed by using a bitwise or of the
@@ -177,12 +177,12 @@ def main():
                         #img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                     
                         ret,ogrgb = rgb.read()
-                        rgbimg = cv2.flip(ogrgb, 1)#flip horizontally
-                        rgbimg = cv2.rotate(rgbimg, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                        pureRGB = rgbimg[140:500, 0:480]#480x640->480x360
+                        #rgbimg = cv2.flip(ogrgb, 1)#flip horizontally
+                        rgbimg = cv2.rotate(ogrgb, cv2.ROTATE_90_CLOCKWISE)
+                        pureRGB = rgbimg[50:410, 120:600]#480x640->480x360
                         pureDim = (320,240)
                         pureRGBr = cv2.resize(pureRGB, pureDim, interpolation = cv2.INTER_AREA)
-                        rgbimg = rgbimg[64:576, 0:512]
+                        rgbimg = rgbimg[54:566, 0:512]
 
                         filename = str(pairNum)
                     
@@ -214,8 +214,9 @@ def main():
                         renderer.camera.histeq_agc_gain_limit = gains[gainmode] #0.65 is default
 
                         # Render the image to the window.
-                        cv2.imshow(window_name, img)
-                        cv2.imshow(other_window, rgbimg)
+                        if gainmode == 2:
+                            cv2.imshow(window_name, img)
+                            cv2.imshow(other_window, rgbimg)
 
             # Process key events.
             key = cv2.waitKey(1)

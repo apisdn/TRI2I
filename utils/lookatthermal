@@ -1,0 +1,28 @@
+import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Read the CSV file
+df = pd.read_csv(os.path.join('therm202408181354','thermography-202408181355.csv'), header=None, delimiter=' ', nrows=240*101)
+
+# Filter the dataframe to keep only the desired columns
+df = df.iloc[:, list(range(20, 260))]
+
+# Assuming each 320x240 map is stored consecutively
+num_maps = len(df) // 240
+thermal_maps = []
+
+# for i in range(num_maps):
+for i in range(100):
+    start_row = i * 240
+    end_row = start_row + 240
+    thermal_map = df.iloc[start_row:end_row, :].values
+    thermal_maps.append(thermal_map)
+
+# Display the thermal maps
+for idx, thermal_map in enumerate(thermal_maps):
+    plt.imshow(thermal_map, cmap='hot', interpolation='nearest')
+    plt.title(f'Thermal Map {idx + 1}')
+    plt.colorbar()
+    plt.show()
